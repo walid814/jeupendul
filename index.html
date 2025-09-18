@@ -168,11 +168,15 @@
 
         function connectToTwitch(){
             if(twitchClient){try{twitchClient.disconnect();}catch{}}
-            twitchClient=new tmi.Client({
-                options:{debug:false},
-                connection:{reconnect:true,secure:true},
-                channels:['squadirfn'] // <--- mets ici TON pseudo Twitch
-            });
+            twitchClient = new tmi.Client({
+    options: { debug: true },
+    connection: { reconnect: true, secure: true },
+    identity: {
+        username: "justinfan12345", // pseudo invité aléatoire
+        password: "oauth:123456789" // pas besoin que ce soit valide en mode anonyme
+    },
+    channels: ["squadirfn"] // ton pseudo de chaîne
+});
             twitchClient.connect().catch(console.error);
             twitchClient.on('message',(channel,tags,message,self)=>{
                 if(self) return;
