@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu du Pendu - Squadir Stream</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/tmi.js@1.8.5/dist/tmi.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&family=Roboto:wght@400;700&display=swap');
+        
+        * {margin:0;padding:0;box-sizing:border-box;}
+        body {
+            background: linear-gradient(135deg,#0f0c29,#302b63,#24243e);
+            color:white;
+            font-family:'Montserrat',sans-serif;
+            min-height:100vh;
+            padding:20px;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+            align-items:center;
+        }
+        .container {
+            width:900px;max-width:95%;
+            background:rgba(0,0,0,0.7);
+            border-radius:15px;
+            padding:30px;
+            box-shadow:0 0 30px rgba(255,0,200,0.5);
+            border:2px solid #ff00c8;
+            text-align:center;
+        }
+        h1 {font-size:2.5rem;margin-bottom:20px;color:#00ffff;text-shadow:0 0 10px #00ffff;}
+        .description {font-family:'Roboto',sans-serif;margin-bottom:30px;font-size:1.2rem;color:#ffcc00;}
+        .game-area {display:flex;flex-direction:column;align-items:center;gap:20px;margin-bottom:30px;}
+        .word-display {
+            font-size:2.5rem;letter-spacing:10px;
+            background:rgba(0,0,0,0.5);padding:15px 30px;border-radius:10px;
+            border:2px solid #00ffff;text-shadow:0 0 5px #00ffff;
+        }
+        .hint {font-family:'Roboto',sans-serif;font-size:1.2rem;color:#ffcc00;}
+        .timer {font-size:1.5rem;color:#ff00c8;text-shadow:0 0 5px #ff00c8;}
+        .controls {display:flex;flex-wrap:wrap;gap:15px;justify-content:center;margin-bottom:20px;}
+        .control-btn {
+            background:linear-gradient(135deg,#ff00c8,#00ffff);
+            border:none;border-radius:8px;padding:12px 20px;
+            color:white;font-weight:bold;cursor:pointer;
+            display:flex;align-items:center;gap:8px;
+            transition:0.3s;
+        }
+        .control-btn:hover {transform:scale(1.05);box-shadow:0 0 15px #00ffff;}
+        .control-btn.reset {background:linear-gradient(135deg,#ff3333,#ff9966);}
+        .control-btn.reset:hover {box-shadow:0 0 15px #ff3333;}
+        .revealed-letters {font-family:'Roboto',sans-serif;font-size:1.2rem;}
+        .revealed-letters span {color:#00ff00;margin:0 5px;text-shadow:0 0 5px #00ff00;}
+        .leaderboard {
+            background:rgba(0,0,0,0.5);
+            border-radius:10px;padding:20px;margin-top:20px;
+            border:2px solid #00ff00;display:none;
+        }
+        .leaderboard h2 {color:#00ff00;margin-bottom:15px;text-shadow:0 0 5px #00ff00;}
+        .leaderboard-list {list-style:none;text-align:left;font-family:'Roboto',sans-serif;}
+        .leaderboard-list li {
+            padding:10px;margin-bottom:5px;background:rgba(255,255,255,0.1);
+            border-radius:5px;display:flex;justify-content:space-between;
+        }
+        .leaderboard-list li:nth-child(1){background:linear-gradient(135deg,rgba(255,215,0,0.3),rgba(255,215,0,0.1));color:#ffd700;font-weight:bold;}
+        .leaderboard-list li:nth-child(2){background:linear-gradient(135deg,rgba(192,192,192,0.3),rgba(192,192,192,0.1));color:#c0c0c0;font-weight:bold;}
+        .leaderboard-list li:nth-child(3){background:linear-gradient(135deg,rgba(205,127,50,0.3),rgba(205,127,50,0.1));color:#cd7f32;font-weight:bold;}
+        .connection-status {
+            position:fixed;top:10px;right:10px;
+            padding:10px 15px;border-radius:5px;font-weight:bold;z-index:100;
+        }
+        .connected {background:rgba(0,255,0,0.2);border:2px solid #00ff00;color:#00ff00;}
+        .disconnected {background:rgba(255,0,0,0.2);border:2px solid #ff3333;color:#ff3333;}
+        @keyframes reveal {0%{transform:scale(0);opacity:0;}100%{transform:scale(1);opacity:1;}}
+        .revealed {animation:reveal 0.5s ease;}
+        .popup {
+            position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+            background:rgba(0,0,0,0.8);color:#00ffcc;padding:15px 20px;
+            border-radius:10px;font-weight:bold;box-shadow:0 0 15px #00ffcc;
+            animation:fadeInOut 4s ease forwards;z-index:200;
+        }
+        @keyframes fadeInOut {
+            0%{opacity:0;transform:translate(-50%,20px);}
+            10%{opacity:1;transform:translate(-50%,0);}
+            90%{opacity:1;}
+            100%{opacity:0;transform:translate(-50%,-20px);}
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status disconnected" id="connectionStatus">
+        <i class="fas fa-times-circle"></i> Déconnecté du chat
+    </div>
+
+    <div class="container">
+        <h1><i class="fas fa-gamepad"></i> Jeu du Pendu - Squadir Stream</h1>
+        <p class="description">Devinez le mot mystère en proposant des lettres dans le chat Twitch !</p>
+
+        <div class="game-area">
+            <div class="hint" id="hint">Catégorie: <span id="category">...</span></div>
+            <div class="word-display" id="wordDisplay">_ _ _ _ _</div>
+            <div class="timer" id="timer"><i class="fas fa-clock"></i> Prochaine lettre dans: <span id="countdown">15</span>s</div>
+            <div class="revealed-letters">Lettres déjà révélées: <span id="revealedLetters">Aucune</span></div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" onclick="newWord()"><i class="fas fa-sync"></i> Nouveau mot</button>
+            <button class="control-btn" onclick="revealRandomLetter()"><i class="fas fa-forward"></i> Révéler une lettre</button>
+            <button class="control-btn reset" onclick="resetGame()"><i class="fas fa-redo"></i> Réinitialiser</button>
+        </div>
+
+        <div class="leaderboard" id="leaderboard">
+            <h2><i class="fas fa-trophy"></i> Classement - Mot: <span id="currentWordLeaderboard"></span></h2>
+            <ul class="leaderboard-list" id="leaderboardList"></ul>
+        </div>
+    </div>
+
+    <script>
+        const words = [
+            {word:"FORTNITE",category:"Jeux vidéo"},
+            {word:"STREAM",category:"Internet"},
+            {word:"MINECRAFT",category:"Jeux vidéo"},
+            {word:"TWITCH",category:"Plateforme"},
+            {word:"DISCORD",category:"Application"},
+            {word:"YOUTUBE",category:"Plateforme vidéo"}
+        ];
+
+        let currentWord="",currentCategory="",displayedWord=[],remainingLetters=0;
+        let revealedIndexes=[],letterRevealInterval,countdownInterval,countdown=15;
+        let gameActive=false,players={},startTime,gameDuration=60,twitchClient=null;
+        let userCooldowns={};
+
+        const wordDisplayElement=document.getElementById('wordDisplay');
+        const categoryElement=document.getElementById('category');
+        const countdownElement=document.getElementById('countdown');
+        const revealedLettersElement=document.getElementById('revealedLetters');
+        const connectionStatusElement=document.getElementById('connectionStatus');
+        const leaderboardElement=document.getElementById('leaderboard');
+        const leaderboardListElement=document.getElementById('leaderboardList');
+        const currentWordLeaderboardElement=document.getElementById('currentWordLeaderboard');
+
+        function showPopup(message){
+            const popup=document.createElement('div');
+            popup.className='popup';
+            popup.innerHTML=message;
+            document.body.appendChild(popup);
+            setTimeout(()=>popup.remove(),4000);
+        }
+
+        function saveScores(){localStorage.setItem('penduScores',JSON.stringify(players));}
+        function loadScores(){const saved=localStorage.getItem('penduScores');if(saved)players=JSON.parse(saved);}
+
+        function initGame(){
+            clearIntervals();
+            resetCountdown();
+            selectRandomWord();
+            setupDisplayedWord();
+            updateWordDisplay();
+            startLetterRevealInterval();
+            startCountdown();
+            startTime=Date.now();
+            gameActive=true;
+            leaderboardElement.style.display='none';
+            connectToTwitch();
+        }
+
+        function connectToTwitch(){
+            if(twitchClient){try{twitchClient.disconnect();}catch{}}
+            twitchClient=new tmi.Client({
+                options:{debug:false},
+                connection:{reconnect:true,secure:true},
+                channels:['squadirfn'] // <--- mets ici TON pseudo Twitch
+            });
+            twitchClient.connect().catch(console.error);
+            twitchClient.on('message',(channel,tags,message,self)=>{
+                if(self) return;
+                connectionStatusElement.className='connection-status connected';
+                connectionStatusElement.innerHTML='<i class="fas fa-check-circle"></i> Connecté au chat';
+                if(gameActive) processMessage(tags.username,message);
+            });
+            twitchClient.on('disconnected',()=>{
+                connectionStatusElement.className='connection-status disconnected';
+                connectionStatusElement.innerHTML='<i class="fas fa-times-circle"></i> Déconnecté du chat';
+                setTimeout(connectToTwitch,5000);
+            });
+        }
+
+        function processMessage(username,message){
+            const now=Date.now();
+            if(userCooldowns[username] && now-userCooldowns[username]<2000) return;
+            userCooldowns[username]=now;
+            const cleanMessage=message.trim().toUpperCase();
+            if(cleanMessage.length===1 && /^[A-Z]$/.test(cleanMessage)){
+                checkLetter(username,cleanMessage);
+            }else if(cleanMessage===currentWord){
+                correctGuess(username);
+            }
+        }
+
+        function checkLetter(username,letter){
+            let found=false;
+            for(let i=0;i<currentWord.length;i++){
+                if(currentWord[i]===letter && displayedWord[i]==='_'){
+                    displayedWord[i]=letter;remainingLetters--;found=true;
+                }
+            }
+            if(found){
+                updateWordDisplay();
+                wordDisplayElement.classList.add('revealed');
+                setTimeout(()=>wordDisplayElement.classList.remove('revealed'),500);
+                if(remainingLetters===0){correctGuess(username);}
+            }
+        }
+
+        function correctGuess(username){
+            if(!gameActive) return;
+            gameActive=false;clearIntervals();
+            const timeTaken=(Date.now()-startTime)/1000;
+            const timeLeft=gameDuration-timeTaken;
+            const score=Math.max(1,Math.floor(timeLeft*10));
+            if(!players[username])players[username]=0;
+            players[username]+=score;
+            saveScores();
+            showPopup(`🎉 @${username} a trouvé "${currentWord}" (+${score} pts)`);
+            showLeaderboard();
+        }
+
+        function showLeaderboard(){
+            currentWordLeaderboardElement.textContent=currentWord;
+            const sortedPlayers=Object.entries(players).sort((a,b)=>b[1]-a[1]).slice(0,10);
+            leaderboardListElement.innerHTML='';
+            if(sortedPlayers.length===0){
+                leaderboardListElement.innerHTML='<li>Aucun joueur pour le moment</li>';
+            }else{
+                sortedPlayers.forEach(([username,score],index)=>{
+                    const li=document.createElement('li');
+                    li.innerHTML=`<span>${index+1}. ${username}</span><span>${score} pts</span>`;
+                    leaderboardListElement.appendChild(li);
+                });
+            }
+            leaderboardElement.style.display='block';
+        }
+
+        function selectRandomWord(){
+            const randomIndex=Math.floor(Math.random()*words.length);
+            currentWord=words[randomIndex].word;
+            currentCategory=words[randomIndex].category;
+            categoryElement.textContent=currentCategory;
+        }
+
+        function setupDisplayedWord(){
+            displayedWord=[];revealedIndexes=[];remainingLetters=currentWord.length;
+            for(let i=0;i<currentWord.length;i++){displayedWord.push('_');}
+        }
+
+        function updateWordDisplay(){
+            wordDisplayElement.innerHTML=displayedWord.join(' ');
+            const revealed=displayedWord.filter(l=>l!=='_');
+            revealedLettersElement.textContent=revealed.length>0?revealed.join(', '):"Aucune";
+        }
+
+        function revealRandomLetter(){
+            if(remainingLetters===0||!gameActive) return;
+            const hiddenIndexes=[];
+            for(let i=0;i<currentWord.length;i++){if(displayedWord[i]==='_')hiddenIndexes.push(i);}
+            const randomIndex=hiddenIndexes[Math.floor(Math.random()*hiddenIndexes.length)];
+            const letterToReveal=currentWord[randomIndex];
+            for(let i=0;i<currentWord.length;i++){
+                if(currentWord[i]===letterToReveal&&displayedWord[i]==='_'){
+                    displayedWord[i]=letterToReveal;remainingLetters--;revealedIndexes.push(i);
+                }
+            }
+            updateWordDisplay();
+            wordDisplayElement.classList.add('revealed');
+            setTimeout(()=>wordDisplayElement.classList.remove('revealed'),500);
+            resetCountdown();
+            if(remainingLetters===0){
+                gameActive=false;clearIntervals();
+                setTimeout(()=>{showPopup(`Personne n'a trouvé. Le mot était "${currentWord}"`);showLeaderboard();},1000);
+            }
+        }
+
+        function resetCountdown(){countdown=15;countdownElement.textContent=countdown;}
+        function startLetterRevealInterval(){clearInterval(letterRevealInterval);letterRevealInterval=setInterval(revealRandomLetter,15000);}
+        function startCountdown(){
+            clearInterval(countdownInterval);
+            countdownInterval=setInterval(()=>{
+                countdown--;countdownElement.textContent=countdown;
+                if(countdown<=0){countdown=0;}
+            },1000);
+        }
+        function newWord(){initGame();}
+        function resetGame(){players={};saveScores();initGame();}
+        function clearIntervals(){clearInterval(letterRevealInterval);clearInterval(countdownInterval);}
+
+        window.onload=()=>{loadScores();initGame();};
+    </script>
+</body>
+</html>
